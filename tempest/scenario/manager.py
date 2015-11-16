@@ -318,6 +318,13 @@ class ScenarioTest(tempest.test.BaseTestCase):
                 'cidr': '0.0.0.0/0',
             },
             {
+                # dhcp
+                'ip_protocol': 'udp',
+                'from_port': 1,
+                'to_port': 65535,
+                'cidr': '0.0.0.0/0',
+            },
+            {
                 # ping
                 'ip_protocol': 'icmp',
                 'from_port': -1,
@@ -1094,6 +1101,12 @@ class NetworkScenarioTest(ScenarioTest):
                 protocol='tcp',
                 port_range_min=22,
                 port_range_max=22,
+            ),
+            dict(
+                # dhcp
+                protocol='udp',
+                port_range_min=1,
+                port_range_max=65535,
             ),
             dict(
                 # ping
