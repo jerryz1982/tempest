@@ -97,7 +97,7 @@ class RemoteClient(object):
                   size=CONF.compute.ping_size):
         addr = netaddr.IPAddress(host)
         cmd = 'ping6' if addr.version == 6 else 'ping'
-        cmd += ' -c{0} -w{0} -s{1} {2}'.format(count, size, host)
+        cmd += ' -c{0} -w{1} -s{2} {3}'.format(count, count+3, size, host)
         return self.exec_command(cmd)
 
     def get_mac_address(self):
