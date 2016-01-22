@@ -16,7 +16,7 @@ import logging
 import netaddr
 
 from tempest.api.orchestration import base
-from tempest import clients
+from tempest.common import credentials_factory as credentials
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import exceptions
@@ -38,13 +38,14 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
     @classmethod
     def setup_credentials(cls):
         super(NeutronResourcesTestJSON, cls).setup_credentials()
-        cls.os = clients.Manager()
+        cls.os = credentials.ConfiguredUserManager()
 
     @classmethod
     def setup_clients(cls):
         super(NeutronResourcesTestJSON, cls).setup_clients()
         cls.network_client = cls.os.network_client
         cls.subnets_client = cls.os.subnets_client
+        cls.ports_client = cls.os.ports_client
 
     @classmethod
     def resource_setup(cls):
@@ -88,7 +89,7 @@ class NeutronResourcesTestJSON(base.BaseOrchestrationTest):
                 server_id = body['physical_resource_id']
                 LOG.debug('Console output for %s', server_id)
                 output = cls.servers_client.get_console_output(
-                    server_id, None)['output']
+                    server_id)['output']
                 LOG.debug(output)
             raise e
 

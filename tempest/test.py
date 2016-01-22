@@ -19,7 +19,6 @@ import os
 import re
 import sys
 import time
-import urllib
 import uuid
 
 import fixtures
@@ -27,12 +26,14 @@ from oslo_log import log as logging
 from oslo_serialization import jsonutils as json
 from oslo_utils import importutils
 import six
+from six.moves import urllib
+from tempest_lib import decorators
 import testscenarios
 import testtools
 
 from tempest import clients
 from tempest.common import cred_client
-from tempest.common import credentials
+from tempest.common import credentials_factory as credentials
 from tempest.common import fixed_network
 import tempest.common.generator.valid_generator as valid
 import tempest.common.validation_resources as vresources
@@ -42,6 +43,8 @@ from tempest import exceptions
 LOG = logging.getLogger(__name__)
 
 CONF = config.CONF
+
+idempotent_id = decorators.idempotent_id
 
 
 def attr(**kwargs):
@@ -59,23 +62,6 @@ def attr(**kwargs):
                 f = testtools.testcase.attr(attr)(f)
         return f
 
-    return decorator
-
-
-def idempotent_id(id):
-    """Stub for metadata decorator"""
-    if not isinstance(id, six.string_types):
-        raise TypeError('Test idempotent_id must be string not %s'
-                        '' % type(id).__name__)
-    uuid.UUID(id)
-
-    def decorator(f):
-        f = testtools.testcase.attr('id-%s' % id)(f)
-        if f.__doc__:
-            f.__doc__ = 'Test idempotent id: %s\n%s' % (id, f.__doc__)
-        else:
-            f.__doc__ = 'Test idempotent id: %s' % id
-        return f
     return decorator
 
 
@@ -211,6 +197,7 @@ atexit.register(validate_tearDownClass)
 class BaseTestCase(testtools.testcase.WithAttributes,
                    testtools.TestCase):
     """The test base class defines Tempest framework for class level fixtures.
+
     `setUpClass` and `tearDownClass` are defined here and cannot be overwritten
     by subclasses (enforced via hacking rule T105).
 
@@ -239,6 +226,7 @@ class BaseTestCase(testtools.testcase.WithAttributes,
     # Resources required to validate a server using ssh
     validation_resources = {}
     network_resources = {}
+    services_microversion = {}
 
     # NOTE(sdague): log_format is defined inline here instead of using the oslo
     # default because going through the config path recouples config to the
@@ -315,8 +303,10 @@ class BaseTestCase(testtools.testcase.WithAttributes,
 
     @classmethod
     def skip_checks(cls):
-        """Class level skip checks. Subclasses verify in here all
-        conditions that might prevent the execution of the entire test class.
+        """Class level skip checks.
+
+        Subclasses verify in here all conditions that might prevent the
+        execution of the entire test class.
         Checks implemented here may not make use API calls, and should rely on
         configuration alone.
         In general skip checks that require an API call are discouraged.
@@ -343,6 +333,7 @@ class BaseTestCase(testtools.testcase.WithAttributes,
     @classmethod
     def setup_credentials(cls):
         """Allocate credentials and the client managers from them.
+
         A test class that requires network resources must override
         setup_credentials and defined the required resources before super
         is invoked.
@@ -380,18 +371,18 @@ class BaseTestCase(testtools.testcase.WithAttributes,
 
     @classmethod
     def resource_setup(cls):
-        """Class level resource setup for test cases.
-        """
+        """Class level resource setup for test cases."""
         if hasattr(cls, "os"):
             cls.validation_resources = vresources.create_validation_resources(
                 cls.os, cls.validation_resources)
         else:
-            LOG.warn("Client manager not found, validation resources not"
-                     " created")
+            LOG.warning("Client manager not found, validation resources not"
+                        " created")
 
     @classmethod
     def resource_cleanup(cls):
         """Class level resource cleanup for test cases.
+
         Resource cleanup must be able to handle the case of partially setup
         resources, in case a failure during `resource_setup` should happen.
         """
@@ -401,8 +392,8 @@ class BaseTestCase(testtools.testcase.WithAttributes,
                                                       cls.validation_resources)
                 cls.validation_resources = {}
             else:
-                LOG.warn("Client manager not found, validation resources not"
-                         " deleted")
+                LOG.warning("Client manager not found, validation resources "
+                            "not deleted")
 
     def setUp(self):
         super(BaseTestCase, self).setUp()
@@ -446,15 +437,24 @@ class BaseTestCase(testtools.testcase.WithAttributes,
         """
         if CONF.identity.auth_version == 'v2':
             client = self.os_admin.identity_client
+            project_client = self.os_admin.tenants_client
+            roles_client = self.os_admin.roles_client
+            users_client = self.os_admin.users_client
         else:
             client = self.os_admin.identity_v3_client
+            project_client = None
+            roles_client = None
+            users_client = None
 
         try:
             domain = client.auth_provider.credentials.project_domain_name
         except AttributeError:
             domain = 'Default'
 
-        return cred_client.get_creds_client(client, domain)
+        return cred_client.get_creds_client(client, project_client,
+                                            roles_client,
+                                            users_client,
+                                            project_domain_name=domain)
 
     @classmethod
     def get_identity_version(cls):
@@ -491,7 +491,7 @@ class BaseTestCase(testtools.testcase.WithAttributes,
         :param credential_type: string - primary, alt or admin
         :param roles: list of roles
 
-        :returns the created client manager
+        :returns: the created client manager
         :raises skipException: if the requested credentials are not available
         """
         if all([roles, credential_type]):
@@ -519,13 +519,12 @@ class BaseTestCase(testtools.testcase.WithAttributes,
             else:
                 raise exceptions.InvalidCredentials(
                     "Invalid credentials type %s" % credential_type)
-        return clients.Manager(credentials=creds, service=cls._service)
+        return clients.Manager(credentials=creds, service=cls._service,
+                               api_microversions=cls.services_microversion)
 
     @classmethod
     def clear_credentials(cls):
-        """
-        Clears creds if set
-        """
+        """Clears creds if set"""
         if hasattr(cls, '_creds_provider'):
             cls._creds_provider.clear_creds()
 
@@ -534,6 +533,7 @@ class BaseTestCase(testtools.testcase.WithAttributes,
                                  security_group=None,
                                  security_group_rules=None):
         """Specify which ssh server validation resources should be created.
+
         Each of the argument must be set to either None, True or False, with
         None - use default from config (security groups and security group
                rules get created when set to None)
@@ -607,10 +607,11 @@ class BaseTestCase(testtools.testcase.WithAttributes,
                 credentials.is_admin_available(
                     identity_version=cls.get_identity_version())):
             admin_creds = cred_provider.get_admin_creds()
-            admin_manager = clients.Manager(admin_creds)
+            admin_manager = clients.Manager(
+                admin_creds, api_microversions=cls.services_microversion)
             networks_client = admin_manager.compute_networks_client
-        return fixed_network.get_tenant_network(cred_provider,
-                                                networks_client)
+        return fixed_network.get_tenant_network(
+            cred_provider, networks_client, CONF.compute.fixed_network_name)
 
     def assertEmpty(self, list, msg=None):
         self.assertTrue(len(list) == 0, msg)
@@ -631,10 +632,11 @@ class NegativeAutoTest(BaseTestCase):
 
     @staticmethod
     def load_tests(*args):
-        """
-        Wrapper for testscenarios to set the mandatory scenarios variable
-        only in case a real test loader is in place. Will be automatically
-        called in case the variable "load_tests" is set.
+        """Wrapper for testscenarios
+
+        To set the mandatory scenarios variable only in case a real test
+        loader is in place. Will be automatically called in case the variable
+        "load_tests" is set.
         """
         if getattr(args[0], 'suiteClass', None) is not None:
             loader, standard_tests, pattern = args
@@ -649,8 +651,7 @@ class NegativeAutoTest(BaseTestCase):
 
     @staticmethod
     def generate_scenario(description):
-        """
-        Generates the test scenario list for a given description.
+        """Generates the test scenario list for a given description.
 
         :param description: A file or dictionary with the following entries:
             name (required) name for the api
@@ -694,7 +695,8 @@ class NegativeAutoTest(BaseTestCase):
         return scenario_list
 
     def execute(self, description):
-        """
+        """Execute a http call
+
         Execute a http call on an api that are expected to
         result in client errors. First it uses invalid resources that are part
         of the url, and then invalid data for queries and http request bodies.
@@ -774,7 +776,7 @@ class NegativeAutoTest(BaseTestCase):
         if not json_dict:
             return url, None
         elif method in ["GET", "HEAD", "PUT", "DELETE"]:
-            return "%s?%s" % (url, urllib.urlencode(json_dict)), None
+            return "%s?%s" % (url, urllib.parse.urlencode(json_dict)), None
         else:
             return url, json.dumps(json_dict)
 
@@ -788,7 +790,8 @@ class NegativeAutoTest(BaseTestCase):
 
     @classmethod
     def set_resource(cls, name, resource):
-        """
+        """Register a resoruce for a test
+
         This function can be used in setUpClass context to register a resoruce
         for a test.
 
@@ -799,10 +802,10 @@ class NegativeAutoTest(BaseTestCase):
         cls._resources[name] = resource
 
     def get_resource(self, name):
-        """
-        Return a valid uuid for a type of resource. If a real resource is
-        needed as part of a url then this method should return one. Otherwise
-        it can return None.
+        """Return a valid uuid for a type of resource.
+
+        If a real resource is needed as part of a url then this method should
+        return one. Otherwise it can return None.
 
         :param name: The name of the kind of resource such as "flavor", "role",
             etc.
@@ -819,9 +822,7 @@ class NegativeAutoTest(BaseTestCase):
 
 
 def SimpleNegativeAutoTest(klass):
-    """
-    This decorator registers a test function on basis of the class name.
-    """
+    """This decorator registers a test function on basis of the class name."""
     @attr(type=['negative'])
     def generic_test(self):
         if hasattr(self, '_schema'):
@@ -838,10 +839,9 @@ def SimpleNegativeAutoTest(klass):
 
 
 def call_until_true(func, duration, sleep_for):
-    """
-    Call the given function until it returns True (and return True) or
-    until the specified duration (in seconds) elapses (and return
-    False).
+    """Call the given function until it returns True (and return True)
+
+    or until the specified duration (in seconds) elapses (and return False).
 
     :param func: A zero argument callable that returns True on success.
     :param duration: The number of seconds for which to attempt a

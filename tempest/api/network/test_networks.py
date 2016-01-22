@@ -28,9 +28,7 @@ CONF = config.CONF
 
 
 class NetworksTest(base.BaseNetworkTest):
-    """
-    Tests the following operations in the Neutron API using the REST client for
-    Neutron:
+    """Tests the following operations in the Neutron API:
 
         create a network for a tenant
         list tenant's networks
@@ -95,9 +93,8 @@ class NetworksTest(base.BaseNetworkTest):
 
     @classmethod
     def _create_subnet_with_last_subnet_block(cls, network, ip_version):
-        """Derive last subnet CIDR block from tenant CIDR and
-           create the subnet with that derived CIDR
-        """
+        # Derive last subnet CIDR block from tenant CIDR and
+        # create the subnet with that derived CIDR
         if ip_version == 4:
             cidr = netaddr.IPNetwork(CONF.network.tenant_network_cidr)
             mask_bits = CONF.network.tenant_network_mask_bits
@@ -133,9 +130,8 @@ class NetworksTest(base.BaseNetworkTest):
         return [{'start': str(gateway + 2), 'end': str(gateway + 3)}]
 
     def subnet_dict(self, include_keys):
-        """Return a subnet dict which has include_keys and their corresponding
-           value from self._subnet_data
-        """
+        # Return a subnet dict which has include_keys and their corresponding
+        # value from self._subnet_data
         return dict((key, self._subnet_data[self._ip_version][key])
                     for key in include_keys)
 
@@ -405,9 +401,7 @@ class NetworksTest(base.BaseNetworkTest):
 
 
 class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
-    """
-    Tests the following operations in the Neutron API using the REST client for
-    Neutron:
+    """Tests the following operations in the Neutron API:
 
         bulk network creation
         bulk subnet creation
@@ -455,9 +449,9 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
     @test.idempotent_id('d4f9024d-1e28-4fc1-a6b1-25dbc6fa11e2')
     def test_bulk_create_delete_network(self):
         # Creates 2 networks in one request
-        network_names = [data_utils.rand_name('network-'),
-                         data_utils.rand_name('network-')]
-        body = self.client.create_bulk_network(network_names)
+        network_list = [{'name': data_utils.rand_name('network-')},
+                        {'name': data_utils.rand_name('network-')}]
+        body = self.client.create_bulk_network(networks=network_list)
         created_networks = body['networks']
         self.addCleanup(self._delete_networks, created_networks)
         # Asserting that the networks are found in the list after creation
@@ -492,7 +486,7 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
             }
             subnets_list.append(p1)
         del subnets_list[1]['name']
-        body = self.client.create_bulk_subnet(subnets_list)
+        body = self.client.create_bulk_subnet(subnets=subnets_list)
         created_subnets = body['subnets']
         self.addCleanup(self._delete_subnets, created_subnets)
         # Asserting that the subnets are found in the list after creation
@@ -518,7 +512,7 @@ class BulkNetworkOpsTestJSON(base.BaseNetworkTest):
             }
             port_list.append(p1)
         del port_list[1]['name']
-        body = self.client.create_bulk_port(port_list)
+        body = self.client.create_bulk_port(ports=port_list)
         created_ports = body['ports']
         self.addCleanup(self._delete_ports, created_ports)
         # Asserting that the ports are found in the list after creation

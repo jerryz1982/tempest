@@ -25,8 +25,7 @@ LOG = log.getLogger(__name__)
 
 class TestVolumeBootPattern(manager.ScenarioTest):
 
-    """
-    This test case attempts to reproduce the following steps:
+    """This test case attempts to reproduce the following steps:
 
      * Create in Cinder some bootable volume importing a Glance image
      * Boot an instance from the bootable volume
@@ -70,7 +69,10 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                 {'name': security_group['name']}]
         create_kwargs.update(self._get_bdm(
             vol_id, delete_on_termination=delete_on_termination))
-        return self.create_server(image='', create_kwargs=create_kwargs)
+        return self.create_server(
+            image='',
+            wait_until='ACTIVE',
+            **create_kwargs)
 
     def _create_snapshot_from_volume(self, vol_id):
         snap_name = data_utils.rand_name('snapshot')
@@ -95,13 +97,6 @@ class TestVolumeBootPattern(manager.ScenarioTest):
         vol_name = data_utils.rand_name('volume')
         return self.create_volume(name=vol_name, snapshot_id=snap_id)
 
-    def _get_server_ip(self, server):
-        if CONF.compute.use_floatingip_for_ssh:
-            ip = self.create_floating_ip(server)['ip']
-        else:
-            ip = server
-        return ip
-
     def _delete_server(self, server):
         self.servers_client.delete_server(server['id'])
         waiters.wait_for_server_termination(self.servers_client, server['id'])
@@ -119,7 +114,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                                                        keypair, security_group)
 
         # write content to volume on instance
-        ip_instance_1st = self._get_server_ip(instance_1st)
+        ip_instance_1st = self.get_server_or_ip(instance_1st)
         timestamp = self.create_timestamp(ip_instance_1st,
                                           private_key=keypair['private_key'])
 
@@ -131,7 +126,7 @@ class TestVolumeBootPattern(manager.ScenarioTest):
                                                        keypair, security_group)
 
         # check the content of written file
-        ip_instance_2nd = self._get_server_ip(instance_2nd)
+        ip_instance_2nd = self.get_server_or_ip(instance_2nd)
         timestamp2 = self.get_timestamp(ip_instance_2nd,
                                         private_key=keypair['private_key'])
         self.assertEqual(timestamp, timestamp2)
@@ -141,13 +136,13 @@ class TestVolumeBootPattern(manager.ScenarioTest):
 
         # create a 3rd instance from snapshot
         volume = self._create_volume_from_snapshot(snapshot['id'])
-        instance_from_snapshot = (
+        server_from_snapshot = (
             self._boot_instance_from_volume(volume['id'],
                                             keypair, security_group))
 
         # check the content of written file
-        ip_instance_from_snapshot = self._get_server_ip(instance_from_snapshot)
-        timestamp3 = self.get_timestamp(ip_instance_from_snapshot,
+        server_from_snapshot_ip = self.get_server_or_ip(server_from_snapshot)
+        timestamp3 = self.get_timestamp(server_from_snapshot_ip,
                                         private_key=keypair['private_key'])
         self.assertEqual(timestamp, timestamp3)
 
@@ -166,7 +161,8 @@ class TestVolumeBootPattern(manager.ScenarioTest):
         self._delete_server(instance)
 
         # boot instance from EBS image
-        instance = self.create_server(image=image['id'])
+        instance = self.create_server(
+            image_id=image['id'])
         # just ensure that instance booted
 
         # delete instance

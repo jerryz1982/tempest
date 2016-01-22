@@ -22,10 +22,7 @@ from tempest import test
 
 
 class ServersAdminTestJSON(base.BaseV2ComputeAdminTest):
-
-    """
-    Tests Servers API using admin privileges
-    """
+    """Tests Servers API using admin privileges"""
 
     _host_key = 'OS-EXT-SRV-ATTR:host'
 
@@ -133,7 +130,7 @@ class ServersAdminTestJSON(base.BaseV2ComputeAdminTest):
     @test.idempotent_id('ee8ae470-db70-474d-b752-690b7892cab1')
     def test_reset_state_server(self):
         # Reset server's state to 'error'
-        self.client.reset_state(self.s1_id)
+        self.client.reset_state(self.s1_id, state='error')
 
         # Verify server's state
         server = self.client.show_server(self.s1_id)['server']
@@ -150,7 +147,7 @@ class ServersAdminTestJSON(base.BaseV2ComputeAdminTest):
     @test.idempotent_id('31ff3486-b8a0-4f56-a6c0-aab460531db3')
     def test_get_server_diagnostics_by_admin(self):
         # Retrieve server diagnostics by admin user
-        diagnostic = self.client.get_server_diagnostics(self.s1_id)
+        diagnostic = self.client.show_server_diagnostics(self.s1_id)
         basic_attrs = ['rx_packets', 'rx_errors', 'rx_drop',
                        'tx_packets', 'tx_errors', 'tx_drop',
                        'read_req', 'write_req', 'cpu', 'memory']

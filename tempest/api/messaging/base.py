@@ -13,21 +13,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from oslo_log import log as logging
-
 from tempest.common.utils import data_utils
 from tempest import config
 from tempest import test
 
 CONF = config.CONF
 
-LOG = logging.getLogger(__name__)
-
 
 class BaseMessagingTest(test.BaseTestCase):
 
-    """
-    Base class for the Messaging tests that use the Tempest Zaqar REST client
+    """Base class for the Messaging (Zaqar) tests
 
     It is assumed that the following option is defined in the
     [service_available] section of etc/tempest.conf
@@ -147,7 +142,7 @@ class BaseMessagingTest(test.BaseTestCase):
     @classmethod
     def release_claim(cls, claim_uri):
         """Wrapper utility that deletes a claim."""
-        resp, body = cls.client.release_claim(claim_uri)
+        resp, body = cls.client.delete_claim(claim_uri)
 
         return resp, body
 

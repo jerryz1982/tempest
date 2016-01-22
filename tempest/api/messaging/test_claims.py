@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
-
 from six.moves.urllib import parse as urlparse
 from tempest_lib import decorators
 
@@ -24,7 +22,6 @@ from tempest import config
 from tempest import test
 
 
-LOG = logging.getLogger(__name__)
 CONF = config.CONF
 
 
@@ -115,7 +112,7 @@ class TestClaims(base.BaseMessagingTest):
         claim_uri = resp['location']
 
         # Release Claim
-        self.client.release_claim(claim_uri)
+        self.client.delete_claim(claim_uri)
 
         # Delete Claimed message
         # This will implicitly verify that the claim is deleted.

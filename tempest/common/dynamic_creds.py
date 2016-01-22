@@ -31,20 +31,40 @@ LOG = logging.getLogger(__name__)
 class DynamicCredentialProvider(cred_provider.CredentialProvider):
 
     def __init__(self, identity_version, name=None, network_resources=None,
-                 credentials_domain=None, admin_role=None):
+                 credentials_domain=None, admin_role=None, admin_creds=None):
+        """Creates credentials dynamically for tests
+
+        A credential provider that, based on an initial set of
+        admin credentials, creates new credentials on the fly for
+        tests to use and then discard.
+
+        :param str identity_version: identity API version to use `v2` or `v3`
+        :param str admin_role: name of the admin role added to admin users
+        :param str name: names of dynamic resources include this parameter
+                         when specified
+        :param str credentials_domain: name of the domain where the users
+                                       are created. If not defined, the project
+                                       domain from admin_credentials is used
+        :param dict network_resources: network resources to be created for
+                                       the created credentials
+        :param Credentials admin_creds: initial admin credentials
+        """
         super(DynamicCredentialProvider, self).__init__(
-            identity_version=identity_version, name=name,
-            network_resources=network_resources,
-            credentials_domain=credentials_domain, admin_role=admin_role)
+            identity_version=identity_version, admin_role=admin_role,
+            name=name, credentials_domain=credentials_domain,
+            network_resources=network_resources)
+        self.network_resources = network_resources
         self._creds = {}
         self.ports = []
-        self.default_admin_creds = cred_provider.get_configured_credentials(
-            'identity_admin', fill_in=True,
-            identity_version=self.identity_version)
-        (self.identity_admin_client, self.network_admin_client,
+        self.default_admin_creds = admin_creds
+        (self.identity_admin_client, self.tenants_admin_client,
+         self.roles_admin_client,
+         self.users_admin_client,
+         self.network_admin_client,
          self.networks_admin_client,
          self.subnets_admin_client,
-         self.ports_admin_client) = self._get_admin_clients()
+         self.ports_admin_client,
+         self.security_groups_admin_client) = self._get_admin_clients()
         # Domain where isolated credentials are provisioned (v3 only).
         # Use that of the admin account is None is configured.
         self.creds_domain_name = None
@@ -53,22 +73,29 @@ class DynamicCredentialProvider(cred_provider.CredentialProvider):
                 self.default_admin_creds.project_domain_name or
                 self.credentials_domain)
         self.creds_client = cred_client.get_creds_client(
-            self.identity_admin_client, self.creds_domain_name)
+            self.identity_admin_client,
+            self.tenants_admin_client,
+            self.roles_admin_client,
+            self.users_admin_client,
+            self.creds_domain_name)
 
     def _get_admin_clients(self):
-        """
-        Returns a tuple with instances of the following admin clients (in this
-        order):
+        """Returns a tuple with instances of the following admin clients
+
+        (in this order):
             identity
             network
         """
         os = clients.Manager(self.default_admin_creds)
         if self.identity_version == 'v2':
-            return (os.identity_client, os.network_client, os.networks_client,
-                    os.subnets_client, os.ports_client)
+            return (os.identity_client, os.tenants_client, os.roles_client,
+                    os.users_client, os.network_client, os.networks_client,
+                    os.subnets_client, os.ports_client,
+                    os.security_groups_client)
         else:
-            return (os.identity_v3_client, os.network_client,
-                    os.networks_client, os.subnets_client, os.ports_client)
+            return (os.identity_v3_client, None, None, None, os.network_client,
+                    os.networks_client, os.subnets_client, os.ports_client,
+                    os.security_groups_client)
 
     def _create_creds(self, suffix="", admin=False, roles=None):
         """Create random credentials under the following schema.
@@ -261,36 +288,36 @@ class DynamicCredentialProvider(cred_provider.CredentialProvider):
         try:
             net_client.delete_router(router_id)
         except lib_exc.NotFound:
-            LOG.warn('router with name: %s not found for delete' %
-                     router_name)
+            LOG.warning('router with name: %s not found for delete' %
+                        router_name)
 
     def _clear_isolated_subnet(self, subnet_id, subnet_name):
         client = self.subnets_admin_client
         try:
             client.delete_subnet(subnet_id)
         except lib_exc.NotFound:
-            LOG.warn('subnet with name: %s not found for delete' %
-                     subnet_name)
+            LOG.warning('subnet with name: %s not found for delete' %
+                        subnet_name)
 
     def _clear_isolated_network(self, network_id, network_name):
         net_client = self.networks_admin_client
         try:
             net_client.delete_network(network_id)
         except lib_exc.NotFound:
-            LOG.warn('network with name: %s not found for delete' %
-                     network_name)
+            LOG.warning('network with name: %s not found for delete' %
+                        network_name)
 
     def _cleanup_default_secgroup(self, tenant):
-        net_client = self.network_admin_client
-        resp_body = net_client.list_security_groups(tenant_id=tenant,
+        nsg_client = self.security_groups_admin_client
+        resp_body = nsg_client.list_security_groups(tenant_id=tenant,
                                                     name="default")
         secgroups_to_delete = resp_body['security_groups']
         for secgroup in secgroups_to_delete:
             try:
-                net_client.delete_security_group(secgroup['id'])
+                nsg_client.delete_security_group(secgroup['id'])
             except lib_exc.NotFound:
-                LOG.warn('Security group %s, id %s not found for clean-up' %
-                         (secgroup['name'], secgroup['id']))
+                LOG.warning('Security group %s, id %s not found for clean-up' %
+                            (secgroup['name'], secgroup['id']))
 
     def _clear_isolated_net_resources(self):
         net_client = self.network_admin_client
@@ -309,8 +336,8 @@ class DynamicCredentialProvider(cred_provider.CredentialProvider):
                     net_client.remove_router_interface_with_subnet_id(
                         creds.router['id'], creds.subnet['id'])
                 except lib_exc.NotFound:
-                    LOG.warn('router with name: %s not found for delete' %
-                             creds.router['name'])
+                    LOG.warning('router with name: %s not found for delete' %
+                                creds.router['name'])
                 self._clear_isolated_router(creds.router['id'],
                                             creds.router['name'])
             if (not self.network_resources or
@@ -330,15 +357,15 @@ class DynamicCredentialProvider(cred_provider.CredentialProvider):
             try:
                 self.creds_client.delete_user(creds.user_id)
             except lib_exc.NotFound:
-                LOG.warn("user with name: %s not found for delete" %
-                         creds.username)
+                LOG.warning("user with name: %s not found for delete" %
+                            creds.username)
             try:
                 if CONF.service_available.neutron:
                     self._cleanup_default_secgroup(creds.tenant_id)
                 self.creds_client.delete_project(creds.tenant_id)
             except lib_exc.NotFound:
-                LOG.warn("tenant with name: %s not found for delete" %
-                         creds.tenant_name)
+                LOG.warning("tenant with name: %s not found for delete" %
+                            creds.tenant_name)
         self._creds = {}
 
     def is_multi_user(self):

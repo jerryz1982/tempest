@@ -14,7 +14,6 @@
 #    under the License.
 import functools
 
-from oslo_log import log as logging
 import six
 
 from tempest import config
@@ -23,7 +22,6 @@ from tempest import test
 
 
 CONF = config.CONF
-LOG = logging.getLogger(__name__)
 
 
 class TestGettingAddress(manager.NetworkScenarioTest):
@@ -65,17 +63,15 @@ class TestGettingAddress(manager.NetworkScenarioTest):
         super(TestGettingAddress, self).setUp()
         self.keypair = self.create_keypair()
         self.sec_grp = self._create_security_group(tenant_id=self.tenant_id)
-        self.srv_kwargs = {
-            'key_name': self.keypair['name'],
-            'security_groups': [{'name': self.sec_grp['name']}]}
 
     def prepare_network(self, address6_mode, n_subnets6=1, dualnet=False):
-        """Creates network with
-         given number of IPv6 subnets in the given mode and
-         one IPv4 subnet
-         Creates router with ports on all subnets
-         if dualnet - create IPv6 subnets on a different network
-         :return: list of created networks
+        """Prepare network
+
+        Creates network with given number of IPv6 subnets in the given mode and
+        one IPv4 subnet.
+        Creates router with ports on all subnets.
+        if dualnet - create IPv6 subnets on a different network
+        :return: list of created networks
         """
         self.network = self._create_network(tenant_id=self.tenant_id)
         if dualnet:
@@ -116,13 +112,15 @@ class TestGettingAddress(manager.NetworkScenarioTest):
         return ips
 
     def prepare_server(self, networks=None):
-        username = CONF.compute.image_ssh_user
+        username = CONF.validation.image_ssh_user
 
-        create_kwargs = self.srv_kwargs
         networks = networks or [self.network]
-        create_kwargs['networks'] = [{'uuid': n.id} for n in networks]
 
-        srv = self.create_server(create_kwargs=create_kwargs)
+        srv = self.create_server(
+            key_name=self.keypair['name'],
+            security_groups=[{'name': self.sec_grp['name']}],
+            networks=[{'uuid': n.id} for n in networks],
+            wait_until='ACTIVE')
         fip = self.create_floating_ip(thing=srv)
         ips = self.define_server_ips(srv=srv)
         ssh = self.get_remote_client(
@@ -147,7 +145,7 @@ class TestGettingAddress(manager.NetworkScenarioTest):
                                   "ports: %s")
                          % (self.network_v6, ports))
         mac6 = ports[0]
-        ssh.turn_nic_on(ssh.get_nic_name(mac6))
+        ssh.set_nic_state(ssh.get_nic_name(mac6))
 
     def _prepare_and_test(self, address6_mode, n_subnets6=1, dualnet=False):
         net_list = self.prepare_network(address6_mode=address6_mode,
@@ -180,10 +178,10 @@ class TestGettingAddress(manager.NetworkScenarioTest):
                 guest_has_address, sshv4_2, ips_from_api_2['6'][i])
 
             self.assertTrue(test.call_until_true(srv1_v6_addr_assigned,
-                                                 CONF.compute.ping_timeout, 1))
+                            CONF.validation.ping_timeout, 1))
 
             self.assertTrue(test.call_until_true(srv2_v6_addr_assigned,
-                                                 CONF.compute.ping_timeout, 1))
+                            CONF.validation.ping_timeout, 1))
 
         self._check_connectivity(sshv4_1, ips_from_api_2['4'])
         self._check_connectivity(sshv4_2, ips_from_api_1['4'])

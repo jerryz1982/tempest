@@ -14,7 +14,6 @@
 #    under the License.
 
 import netaddr
-from oslo_log import log as logging
 from tempest_lib import exceptions as lib_exc
 
 from tempest.common.utils import data_utils
@@ -24,13 +23,9 @@ import tempest.test
 
 CONF = config.CONF
 
-LOG = logging.getLogger(__name__)
-
 
 class BaseNetworkTest(tempest.test.BaseTestCase):
-
-    """
-    Base class for the Neutron tests that use the Tempest Neutron REST client
+    """Base class for the Neutron tests
 
     Per the Neutron API Guide, API v1.x was removed from the source code tree
     (docs.openstack.org/api/openstack-network/2.0/content/Overview-d1e71.html)
@@ -73,9 +68,14 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     def setup_clients(cls):
         super(BaseNetworkTest, cls).setup_clients()
         cls.client = cls.os.network_client
+        cls.agents_client = cls.os.network_agents_client
         cls.networks_client = cls.os.networks_client
+        cls.subnetpools_client = cls.os.subnetpools_client
         cls.subnets_client = cls.os.subnets_client
         cls.ports_client = cls.os.ports_client
+        cls.quotas_client = cls.os.network_quotas_client
+        cls.floating_ips_client = cls.os.floating_ips_client
+        cls.security_groups_client = cls.os.security_groups_client
 
     @classmethod
     def resource_setup(cls):
@@ -94,18 +94,22 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
         if CONF.service_available.neutron:
             # Clean up floating IPs
             for floating_ip in cls.floating_ips:
-                cls._try_delete_resource(cls.client.delete_floatingip,
-                                         floating_ip['id'])
+                cls._try_delete_resource(
+                    cls.floating_ips_client.delete_floatingip,
+                    floating_ip['id'])
 
             # Clean up metering label rules
+            # Not all classes in the hierarchy have the client class variable
+            if len(cls.metering_label_rules) > 0:
+                label_rules_client = cls.admin_metering_label_rules_client
             for metering_label_rule in cls.metering_label_rules:
                 cls._try_delete_resource(
-                    cls.admin_client.delete_metering_label_rule,
+                    label_rules_client.delete_metering_label_rule,
                     metering_label_rule['id'])
             # Clean up metering labels
             for metering_label in cls.metering_labels:
                 cls._try_delete_resource(
-                    cls.admin_client.delete_metering_label,
+                    cls.admin_metering_labels_client.delete_metering_label,
                     metering_label['id'])
             # Clean up ports
             for port in cls.ports:
@@ -234,7 +238,7 @@ class BaseNetworkTest(tempest.test.BaseTestCase):
     @classmethod
     def create_floatingip(cls, external_network_id):
         """Wrapper utility that returns a test floating IP."""
-        body = cls.client.create_floatingip(
+        body = cls.floating_ips_client.create_floatingip(
             floating_network_id=external_network_id)
         fip = body['floatingip']
         cls.floating_ips.append(fip)
@@ -268,14 +272,20 @@ class BaseAdminNetworkTest(BaseNetworkTest):
     def setup_clients(cls):
         super(BaseAdminNetworkTest, cls).setup_clients()
         cls.admin_client = cls.os_adm.network_client
+        cls.admin_agents_client = cls.os_adm.network_agents_client
         cls.admin_networks_client = cls.os_adm.networks_client
         cls.admin_subnets_client = cls.os_adm.subnets_client
         cls.admin_ports_client = cls.os_adm.ports_client
+        cls.admin_quotas_client = cls.os_adm.network_quotas_client
+        cls.admin_floating_ips_client = cls.os_adm.floating_ips_client
+        cls.admin_metering_labels_client = cls.os_adm.metering_labels_client
+        cls.admin_metering_label_rules_client = (
+            cls.os_adm.metering_label_rules_client)
 
     @classmethod
     def create_metering_label(cls, name, description):
         """Wrapper utility that returns a test metering label."""
-        body = cls.admin_client.create_metering_label(
+        body = cls.admin_metering_labels_client.create_metering_label(
             description=description,
             name=data_utils.rand_name("metering-label"))
         metering_label = body['metering_label']
@@ -286,7 +296,8 @@ class BaseAdminNetworkTest(BaseNetworkTest):
     def create_metering_label_rule(cls, remote_ip_prefix, direction,
                                    metering_label_id):
         """Wrapper utility that returns a test metering label rule."""
-        body = cls.admin_client.create_metering_label_rule(
+        client = cls.admin_metering_label_rules_client
+        body = client.create_metering_label_rule(
             remote_ip_prefix=remote_ip_prefix, direction=direction,
             metering_label_id=metering_label_id)
         metering_label_rule = body['metering_label_rule']

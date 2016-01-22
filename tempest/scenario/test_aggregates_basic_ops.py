@@ -13,20 +13,15 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from oslo_log import log as logging
-
 from tempest.common import tempest_fixtures as fixtures
 from tempest.common.utils import data_utils
 from tempest.scenario import manager
 from tempest import test
 
 
-LOG = logging.getLogger(__name__)
-
-
 class TestAggregatesBasicOps(manager.ScenarioTest):
-    """
-    Creates an aggregate within an availability zone
+    """Creates an aggregate within an availability zone
+
     Adds a host to the aggregate
     Checks aggregate details
     Updates aggregate's name

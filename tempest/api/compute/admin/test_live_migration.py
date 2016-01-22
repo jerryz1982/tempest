@@ -35,8 +35,8 @@ class LiveBlockMigrationTestJSON(base.BaseV2ComputeAdminTest):
             skip_msg = ("%s skipped as live-migration is "
                         "not available" % cls.__name__)
             raise cls.skipException(skip_msg)
-        if len(cls._get_compute_hostnames()) < 2:
-            raise cls.skipTest(
+        if CONF.compute.min_compute_nodes < 2:
+            raise cls.skipException(
                 "Less than 2 compute nodes, skipping migration test.")
 
     @classmethod
