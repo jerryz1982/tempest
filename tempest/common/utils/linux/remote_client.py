@@ -100,7 +100,7 @@ class RemoteClient(object):
         cmd = 'ping6' if addr.version == 6 else 'ping'
         if nic:
             cmd = 'sudo {cmd} -I {nic}'.format(cmd=cmd, nic=nic)
-        cmd += ' -c{0} -w{1} -s{2} {3}'.format(count, count+3, size, host)
+        cmd += ' -c{0} -w{0} -s{1} {2}'.format(count, size, host)
         return self.exec_command(cmd)
 
     def set_mac_address(self, nic, address):
