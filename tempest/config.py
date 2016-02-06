@@ -547,6 +547,10 @@ NetworkGroup = [
                 default=["1.0.0.0/16", "2.0.0.0/16"],
                 help="List of ip pools"
                      " for subnetpools creation"),
+    cfg.BoolOpt('one_router_per_tenant',
+                default=False,
+                help="Whether one tenant can support multiple routers, "
+                     "some 3rd party plugin might not")
 ]
 
 network_feature_group = cfg.OptGroup(name='network-feature-enabled',

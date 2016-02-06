@@ -1147,14 +1147,22 @@ class NetworkScenarioTest(ScenarioTest):
             client = self.network_client
         if not tenant_id:
             tenant_id = client.tenant_id
-        name = data_utils.rand_name(namestart)
-        result = client.create_router(name=name,
-                                      admin_state_up=True,
-                                      tenant_id=tenant_id)
-        router = net_resources.DeletableRouter(client=client,
-                                               **result['router'])
-        self.assertEqual(router.name, name)
-        self.addCleanup(self.delete_wrapper, router.delete)
+        if CONF.network.one_router_per_tenant:
+            routers_list = client.list_routers(tenant_id=tenant_id)
+            if len(routers_list['routers']) == 1:
+                router = routers_list['routers'][0]
+                router = net_resources.DeletableRouter(client=client,
+                                                       **router)
+        else:
+            name = data_utils.rand_name(namestart)
+            result = client.create_router(name=name,
+                                          admin_state_up=True,
+                                          tenant_id=tenant_id)
+            print result
+            router = net_resources.DeletableRouter(client=client,
+                                                   **result['router'])
+            self.assertEqual(router.name, name)
+            self.addCleanup(self.delete_wrapper, router.delete)
         return router
 
     def _update_router_admin_state(self, router, admin_state_up):
