@@ -96,6 +96,8 @@ class TestNetworkAdvancedServerOps(manager.NetworkScenarioTest):
             import time
             with open('/tmp/timeout.txt', 'w') as f:
                 f.write('reboot timeout')
+                f.write('connect timeout\n')
+                f.close()
             time.sleep(3600)
             pass
 
