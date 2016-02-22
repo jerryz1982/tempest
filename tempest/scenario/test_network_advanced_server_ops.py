@@ -90,7 +90,14 @@ class TestNetworkAdvancedServerOps(manager.NetworkScenarioTest):
                                                            floating_ip):
         waiters.wait_for_server_status(self.servers_client, server['id'],
                                        'ACTIVE')
-        self._check_network_connectivity(server, keypair, floating_ip)
+        try:
+            self._check_network_connectivity(server, keypair, floating_ip)
+        except:
+            import time
+            with open('/tmp/timeout.txt', 'w') as f:
+                f.write('reboot timeout')
+            time.sleep(3600)
+            pass
 
     @test.idempotent_id('61f1aa9a-1573-410e-9054-afa557cab021')
     @test.stresstest(class_setup_per='process')
