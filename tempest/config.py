@@ -630,7 +630,7 @@ ValidationGroup = [
                default=4,
                help='Default IP version for ssh connections.'),
     cfg.IntOpt('ping_timeout',
-               default=120,
+               default=360,
                help='Timeout in seconds to wait for ping to succeed.',
                deprecated_opts=[cfg.DeprecatedOpt('ping_timeout',
                                                   group='compute')]),
