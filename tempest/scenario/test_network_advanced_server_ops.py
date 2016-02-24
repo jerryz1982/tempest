@@ -93,11 +93,16 @@ class TestNetworkAdvancedServerOps(manager.NetworkScenarioTest):
         try:
             self._check_network_connectivity(server, keypair, floating_ip)
         except:
-            import time
-            with open('/tmp/timeout.txt', 'w') as f:
-                f.write('reboot timeout')
-                f.write('connect timeout\n')
-                f.close()
+            import smtplib
+            from email.mime.text import MIMEText
+            msg=MIMEText('connect timeout\n')
+            msg['Subject']='timeout caught!!!'
+            msg['From']='jerryzhao@fortinet.com'
+            msg['To']='xyzjerry@gmail.com'
+            s=smtplib.SMTP('localhost')
+            s.sendmail('jerryzhao@fortinet.com',['xyzjerry@gmail.com'],
+                       msg.as_string())
+            s.quit()
             time.sleep(3600)
             pass
 
