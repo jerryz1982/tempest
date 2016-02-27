@@ -94,6 +94,7 @@ class TestNetworkAdvancedServerOps(manager.NetworkScenarioTest):
             self._check_network_connectivity(server, keypair, floating_ip)
         except:
             import smtplib
+            import time
             from email.mime.text import MIMEText
             msg=MIMEText('connect timeout\n')
             msg['Subject']='timeout caught!!!'
@@ -104,7 +105,7 @@ class TestNetworkAdvancedServerOps(manager.NetworkScenarioTest):
                        msg.as_string())
             s.quit()
             time.sleep(3600)
-            pass
+            raise
 
     @test.idempotent_id('61f1aa9a-1573-410e-9054-afa557cab021')
     @test.stresstest(class_setup_per='process')
