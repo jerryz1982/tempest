@@ -148,7 +148,15 @@ class Client(object):
                 if channel.recv_stderr_ready():
                     err_chunk = channel.recv_stderr(self.buf_size)
                     err_data_chunks += err_chunk,
-                if channel.closed and not err_chunk and not out_chunk:
+                # Once get exit status and it is not None, break with
+                # whatever we get from channel because channel may not
+                # close as expected.
+                if (exit_status is not None and not err_chunk and
+                    not out_chunk):
+                    try:
+                        channel.close()
+                    except Exception:
+                        pass
                     break
             out_data = b''.join(out_data_chunks)
             err_data = b''.join(err_data_chunks)
